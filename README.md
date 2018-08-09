@@ -1,6 +1,8 @@
 # clambda
 
-
+<p align="center">
+  <img src="https://accelerator-origin.kkomando.com/wp-content/uploads/2018/02/file-conversion.jpg"/>
+</p>
 
 
 Java ships with some robust parallel Streams already implemented. If you don't believe me, check the `Files.lines()` stream in JDK9 for yourself. `clambda` is a little Clojure library to help you reduce/transduce over Java Streams (including parallel ones).
@@ -8,13 +10,13 @@ Helpers for conveniently creating Lamdas from plain Clojure functions were inevi
 
 ## Where
 
-TBC
+![](https://clojars.org/clambda/latest-version.svg)
 
 ## Why
 
 This code started out as an attempt to write a parallel dictionary-attack tool (for great fun and NO profit) that could handle really
 big files without memory linearly growing. Laziness, or even better, something reducible will do a great job at that,
-but constrained me in one thread. I quickly realised that I could use Java Streams. In fact, when I found out that `Files.lines`
+but constrained me in one thread. I quickly realised that I could use Java Streams. In fact, when I found out that `Files.lines()`
 returned a Stream that could be turned to parallel rather easily - I was simply was ecstatic (turns out that's only true for JDK 9 and above).
 Long story short, once the potential clicked, I simply wrote some convenience utilities, and some interesting things simply fell out.
 
