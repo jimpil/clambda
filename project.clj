@@ -1,4 +1,4 @@
-(defproject clambda "0.1.4"
+(defproject clambda "0.1.5-SNAPSHOT"
   :description "Utilities for working with Java Streams/Lambdas from Clojure."
   :url "https://github.com/jimpil/clambda"
   :license {:name "Eclipse Public License"

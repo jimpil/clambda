@@ -37,17 +37,12 @@
    and optionally short-circuiting (via the 3-arg overload)."
   ([s]
    (stream-reducible s throw-combine-not-provided!))
-  ([s combinef]
-   (stream-reducible s combinef false))
-  ([^Stream s combinef abortive?]
+  ([^Stream s combinef]
    (reify IReduceInit
      (reduce [_ f init]
-       (let [[done? done!] (when abortive?
-                             (let [flag (AtomicBoolean. false)]
-                               [#(.get flag)
-                                #(.set flag true)]))
-             done? (or done? (constantly false))
-             done! (or done! (constantly nil))
+       (let [flag (AtomicBoolean. false)
+             done? #(.get flag)
+             done! #(.set flag true)
              bi-function (jl/jlambda :bi-function (partial accu* f done!)) ;; accumulator
              binary-op   (jl/jlambda :binary combinef)]       ;; combiner
          (with-open [estream (abortive-stream s done?)]
@@ -91,7 +86,7 @@
    (let [combine (if (.isParallel stream)
                    (some-fn combine-f)
                    throw-combine-not-provided!)]
-     (transduce xform rf-some (stream-reducible stream combine true)))))
+     (transduce xform rf-some (stream-reducible stream combine)))))
 
 (defn lines-reducible
   "Similar to `clojure.core/line-seq`, but
