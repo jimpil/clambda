@@ -8,7 +8,7 @@
 Java ships with some robust parallel Streams already implemented. If you don't believe me, check the `Files.lines()` stream in JDK9 for yourself. `clambda` is a little Clojure library to help you reduce/transduce over Java Streams (including parallel ones).
 Helpers for conveniently creating Lamdas from plain Clojure functions were inevitable.
 
-[This](https://www.ibm.com/developerworks/library/j-java-streams-3-brian-goetz/index.html) article helped me a lot in understanding Spliterators.
+[This](https://www.ibm.com/developerworks/library/j-java-streams-3-brian-goetz/index.html) article helped me a lot in digesting Streams, and perhaps more importantly, Spliterators.
 I highly recommend it to anyone who wants a concise, but 'packed' resource.
 
 ## Where
