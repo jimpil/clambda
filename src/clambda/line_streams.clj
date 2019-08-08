@@ -54,8 +54,8 @@
    if the end-goal is collecting everything, then use `into` as
    the <combine-f>, and `conj` as the reducing-f.
 
-   See `clambda.core/stream-into` for an example of a collecting context,
-   and `clambda.core/stream-some` for an example of a short-circuiting one.
+   See `core/stream-into` for an example of a collecting context,
+   and `core/stream-some` for an example of a short-circuiting one.
 
    Files greater than 2GB cannot be processed this way due to JVM array
    indexing using ints. Consider splitting huge files into 2GB chunks."
@@ -66,6 +66,21 @@
            .parallel
            (core/stream-reducible combine))
        (stream-lines f)))
+
+(defn copy-lines!
+  "Copy (by means of streaming) the lines from <in>
+   (anything compatible with `io/reader`) to <out>
+   (anything compatible with `io/writer`), transforming
+   them with <f> along the way (no laziness).
+   Returns nil."
+  [f in out]
+  (with-open [wrt (io/writer out)]
+    (run!
+      (fn [^String line]
+        (.write wrt line)
+        (.write wrt System/lineSeparator))
+      (stream-lines f in))
+    (.flush wrt)))
 
 (comment
 
