@@ -247,6 +247,23 @@ In terms of an actual library however, I was only able to find [ike.cljj](https:
 which does a fine job, if you're willing to sacrifice the potential for parallelism (that a Stream might otherwise give you).
 
 
+## Line-streams (added on 0.1.5)
+The `clambda.line-streams` namespace contains two functions (serial \& parallel) that can be used for streaming/processing newline-delimited input. One can build powerful parsers/processors on top of these - for instance [JSONLines](http://jsonlines.org/) which is becoming increasingly popular would be a great candidate. Let's look at how easy this is:
+
+```clj
+;; SERIAL JSON-LINES PARSER
+  (->> input ;; anything compatible with `io/reader`
+       (stream-lines data.json/read-str)
+       (into [] (map identity)))  ;; dummy xform
+
+  ;; PARALLEL JSON-LINES PARSER
+  (->> input ;; local File/URL/URL/String
+       (pstream-lines data.json/read-str into)
+       (transduce (map identity) conj []))  ;; dummy xform
+```
+We can take the above code, replace `data.json/read-str` with `#(str/split % #",")`, and now we have two CSV-LINES parsers - albeit not fully RFC4180 compliant. In short, any input that is delimited on newlines can be parsed/processed/streamed in this fashion, especially if the input resides on the local disk, in which case parallelism can be exploited.
+
+
 ## License
 
 Copyright © 2018 Dimitrios Piliouras
