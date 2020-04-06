@@ -1,9 +1,10 @@
 (ns clambda.line-streams
   (:require [clambda.core :as core]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [clojure.string :as str])
   (:import (java.nio.file Files Paths)
            (java.net URL URI)
-           (java.io File)
+           (java.io File BufferedWriter)
            (clojure.lang IReduceInit)))
 
 (defprotocol LocalPath
@@ -60,12 +61,12 @@
    Files greater than 2GB cannot be processed this way due to JVM array
    indexing using ints. Consider splitting huge files into 2GB chunks."
   [f combine in]
-  (->> (-> in
-           local-path
-           Files/lines
-           .parallel
-           (core/stream-reducible combine))
-       (stream-lines f)))
+  (let [rs (-> in
+               local-path
+               Files/lines
+               .parallel
+               (core/stream-reducible combine))]
+    (stream-lines f rs)))
 
 (defn copy-lines!
   "Copy (by means of streaming) the lines from <in>
@@ -74,24 +75,62 @@
    them with <f> along the way (no laziness).
    Returns nil."
   [f in out]
-  (with-open [wrt (io/writer out)]
+  (with-open [^BufferedWriter wrt (io/writer out)]
     (run!
       (fn [^String line]
         (.write wrt line)
-        (.write wrt System/lineSeparator))
+        (.newLine wrt))
       (stream-lines f in))
     (.flush wrt)))
 
 (comment
 
+  (defn ->json [x t]
+    (case t
+      ("int", "long")     (Long/parseLong x)
+      ("double", "float") (Double/parseDouble x)
+      ("bool", "boolean") (Boolean/parseBoolean x)
+      (str x)))
+
+  (defn json-tuple
+    [csv-vals [i path t]]
+    [(str/split path #"\.")
+     (-> csv-vals
+         (nth (unchecked-dec i))
+         (->json t))])
+
+  (defn csv->json-lines
+    ([file-in file-out ks-and-types]
+     (csv->json-lines file-in file-out ks-and-types \,))
+    ([file-in file-out ks-and-types sep]
+     (copy-lines!
+       (fn [line]
+         (let [csv-row (first (csv/read-csv line :separator sep))]
+           (->> ks-and-types
+                (eduction (map (partial json-tuple csv-row)))
+                (reduce (partial apply assoc-in) {})
+                json/write-str)))
+       file-in
+       file-out)))
+
+  (csv->json-lines
+    "/Users/dimitrios/Desktop/in.csv"
+    "/Users/dimitrios/Desktop/out.json"
+    [[1 "event.uuid"]
+     [2 "user.id" "int"]
+     [4 "event.timestamp"]
+     [6 "admin" "bool"]])
+
+
+
   ;; SERIAL JSON-LINES PARSER
   (->> input ;; anything compatible with `io/reader`
-       (stream-lines data.json/read-str)
+       (stream-lines json/read-str)
        (into []))
 
   ;; PARALLEL JSON-LINES PARSER
   (->> input ;; local File/URL/URL/String
-       (pstream-lines data.json/read-str into)
+       (pstream-lines json/read-str into)
        (reduce conj []))
 
   )
