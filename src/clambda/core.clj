@@ -6,7 +6,8 @@
            (java.io BufferedReader)
            (java.util Iterator Spliterator)
            (clambda.redux SeqSpliterator)
-           (java.util.concurrent.atomic AtomicBoolean)))
+           (java.util.concurrent.atomic AtomicBoolean)
+           (java.util.function IntFunction)))
 
 (defn- accu*
   "A little helper for creating accumulators."
@@ -162,3 +163,10 @@
    Type-hinting at the call site may be required (to avoid reflection)."
   [t f]
   (jl/jlambda t f))
+
+(defn into-array-of
+  "Similar to `into-array`, but will work with Java Streams too."
+  [^Class t xs]
+  (if (instance? Stream xs)
+    (.toArray xs (reify IntFunction (apply [_ size] (make-array t size))))
+    (into-array t xs)))
