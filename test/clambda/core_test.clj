@@ -1,7 +1,7 @@
 (ns clambda.core-test
   (:require [clojure.test :refer :all]
             [clambda.core :refer :all])
-  (:import (java.util.stream LongStream Collectors)
+  (:import (java.util.stream LongStream Collectors Stream)
            (java.util Random ArrayList Arrays)))
 
 (defn hard-worker
@@ -107,4 +107,10 @@
 
     )
 
+  )
+
+(deftest into-array-of-tests
+  (let [expected (into-array ["a" "b" "c" "d" "e"])
+        s (Arrays/stream (.split "a,b,c,d,e" ","))]
+    (is (Arrays/equals expected (into-array-of String s))))
   )
