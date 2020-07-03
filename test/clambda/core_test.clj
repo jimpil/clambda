@@ -110,7 +110,16 @@
   )
 
 (deftest into-array-of-tests
-  (let [expected (into-array ["a" "b" "c" "d" "e"])
-        s (Arrays/stream (.split "a,b,c,d,e" ","))]
-    (is (Arrays/equals expected (into-array-of String s))))
+  (let [expected (into-array ["1" "2" "3" "4" "5"])
+        s (Arrays/stream (.split "1,2,3,4,5" ","))]
+    (is (Arrays/equals expected (into-array-of s))))
+
+  (let [expected (into-array ["2" "3" "4" "5" "6"])
+        s (Arrays/stream (.split "1,2,3,4,5" ","))]
+    (is (Arrays/equals expected (into-array-of (map (comp str inc #(Integer/parseInt %))) s))))
+
+
+  (let [expected (into-array ["2" "3" "4" "5" "6"])
+        s (Arrays/stream (.split "1,2,3,4,5" ","))]
+    (is (Arrays/equals expected (into-array-of String (map (comp str inc #(Integer/parseInt %))) s))))
   )

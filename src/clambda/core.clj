@@ -31,6 +31,9 @@
    (when x
      (ensure-reduced x))))
 
+(defn stream? [x]
+  (instance? Stream x))
+
 ;;=================================
 
 (defn stream-reducible
@@ -158,6 +161,12 @@
   ;; to help you avoid doing exactly that (going via Seq)
   (-> s .iterator iterator-seq))
 
+(defn stream-array
+  "Returns a typed <t> array containing all the elements of Stream <s>."
+  [^Class t ^Stream s]
+  (->> (reify IntFunction (apply [_ size] (make-array t size)))
+       (.toArray s)))
+
 (defn jlambda
   "Convenience wrapper-fn around `clambda.jlambda/jlambda`.
    Type-hinting at the call site may be required (to avoid reflection)."
@@ -165,8 +174,17 @@
   (jl/jlambda t f))
 
 (defn into-array-of
-  "Similar to `into-array`, but will work with Java Streams too."
-  [^Class t xs]
-  (if (instance? Stream xs)
-    (.toArray xs (reify IntFunction (apply [_ size] (make-array t size))))
-    (into-array t xs)))
+  "Similar to `into-array`, but can take a transducer,
+   and will work against Java Streams and Clojure reducibles."
+  ([xs]
+   (into-array-of nil xs))
+  ([xform xs]
+   (into-array-of nil xform xs))
+  ([^Class t xform xs]
+   (let [stream-sequence (cond->> xs
+                                  (stream? xs) stream-seq
+                                  xform (sequence xform))]
+     (if (nil? t)
+       (into-array stream-sequence)
+       (into-array t stream-sequence)))))
+
