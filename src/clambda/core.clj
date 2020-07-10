@@ -1,4 +1,5 @@
 (ns clambda.core
+  (:refer-clojure :exclude [into-array])
   (:require [clambda.redux :refer [abortive-stream vrest mrest rrest]]
             [clambda.jlambda :as jl])
   (:import [java.util.stream Stream StreamSupport]
@@ -161,30 +162,30 @@
   ;; to help you avoid doing exactly that (going via Seq)
   (-> s .iterator iterator-seq))
 
-(defn stream-array
-  "Returns a typed <t> array containing all the elements of Stream <s>."
-  [^Class t ^Stream s]
-  (->> (reify IntFunction (apply [_ size] (make-array t size)))
-       (.toArray s)))
-
 (defn jlambda
   "Convenience wrapper-fn around `clambda.jlambda/jlambda`.
    Type-hinting at the call site may be required (to avoid reflection)."
   [t f]
   (jl/jlambda t f))
 
-(defn into-array-of
-  "Similar to `into-array`, but can take a transducer,
-   and will work against Java Streams and Clojure reducibles."
+(defn stream-array
+  "Collects all the elements of Stream <s> into an array of type <t>."
+  [^Class t ^Stream s]
+  (->> (reify IntFunction (apply [_ size] (make-array t size)))
+       (.toArray s)))
+
+(defn into-array
+  "An drop-in replacement for `clojure.core/into-array`,
+   which will work against Java Streams and can take a transducer."
   ([xs]
-   (into-array-of nil xs))
+   (into-array nil xs))
   ([xform xs]
-   (into-array-of nil xform xs))
+   (into-array nil xform xs))
   ([^Class t xform xs]
-   (let [stream-sequence (cond->> xs
-                                  (stream? xs) stream-seq
-                                  xform (sequence xform))]
+   (let [sseq (cond->> xs
+                       (stream? xs) stream-seq
+                       xform (eduction xform))]
      (if (nil? t)
-       (into-array stream-sequence)
-       (into-array t stream-sequence)))))
+       (clojure.core/into-array sseq)
+       (clojure.core/into-array t sseq)))))
 

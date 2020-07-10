@@ -1,7 +1,8 @@
 (ns clambda.core-test
+  (:refer-clojure :exclude [into-array])
   (:require [clojure.test :refer :all]
             [clambda.core :refer :all])
-  (:import (java.util.stream LongStream Collectors Stream)
+  (:import (java.util.stream LongStream Collectors)
            (java.util Random ArrayList Arrays)))
 
 (defn hard-worker
@@ -109,17 +110,19 @@
 
   )
 
-(deftest into-array-of-tests
-  (let [expected (into-array ["1" "2" "3" "4" "5"])
-        s (Arrays/stream (.split "1,2,3,4,5" ","))]
-    (is (Arrays/equals expected (into-array-of s))))
+(deftest into-array-tests
+  (testing "Stream => array (w/o xform)"
+    (let [expected (clojure.core/into-array ["1" "2" "3" "4" "5"])
+          s (Arrays/stream (.split "1,2,3,4,5" ","))]
+      (is (Arrays/equals expected (into-array s)))))
+
+  (testing "Stream => array (w/ xform)"
+    (let [expected (into-array ["2" "3" "4" "5" "6"])
+          s (Arrays/stream (.split "1,2,3,4,5" ","))]
+      (is (Arrays/equals expected (into-array (map (comp str inc #(Integer/parseInt %))) s)))))
+
 
   (let [expected (into-array ["2" "3" "4" "5" "6"])
         s (Arrays/stream (.split "1,2,3,4,5" ","))]
-    (is (Arrays/equals expected (into-array-of (map (comp str inc #(Integer/parseInt %))) s))))
-
-
-  (let [expected (into-array ["2" "3" "4" "5" "6"])
-        s (Arrays/stream (.split "1,2,3,4,5" ","))]
-    (is (Arrays/equals expected (into-array-of String (map (comp str inc #(Integer/parseInt %))) s))))
+    (is (Arrays/equals expected (into-array String (map (comp str inc #(Integer/parseInt %))) s))))
   )
