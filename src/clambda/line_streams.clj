@@ -133,4 +133,14 @@
        (pstream-lines json/read-str into)
        (reduce conj []))
 
+  (defn unix-words
+    ([] (unix-words "/usr/share/dict/words"))
+    ([words-file-path]
+     (->> words-file-path
+          io/reader
+          core/lines-reducible
+          (eduction (filter seq)))))
+
+  ;; (count (into [] (unix-words))) => 235886
+
   )
