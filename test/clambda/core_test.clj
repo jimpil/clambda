@@ -9,7 +9,7 @@
   [f ms]
   (let [ms (inc ms)]
     (fn [& args]
-      (Thread/sleep (rand-int ms))
+      (Thread/sleep ^long (rand-int ms))
       (apply f args))))
 
 (deftest stream-into-tests
@@ -44,6 +44,27 @@
       (is (not= expected ;; there are duplicate :a because `[:a]` became the <init> in more than one thread
                 (stream-into [:a] test-stream)))))
 
+  (testing "mutable-reduction against parallel stream"
+    (let [test-stream (.parallel (LongStream/range 0 500))
+          expected (range 500)]
+      (is (= expected
+             (into [] (stream-into (ArrayList.) test-stream))))))
+
+  (testing "mutable-reduction with transducer against parallel stream"
+    (let [test-stream (.parallel (LongStream/range 0 500))
+          xform (map inc)
+          expected (range 1 501)]
+      (is (= expected
+             (into [] (stream-into (ArrayList.) xform test-stream)))))
+
+    (let [test-stream (.parallel (LongStream/range 0 500))
+          xform (comp (map inc) (map str))
+          expected (apply str (range 1 501))]
+      (is (= expected
+             (str (stream-into (StringBuilder.) xform test-stream)))))
+
+    )
+
   )
 
 
@@ -74,8 +95,8 @@
   ([s [f1 f2]]
    (let [test-seq s
          test-seq-stream (seq-stream test-seq 10000 true)
-         pred-lamda (jlambda :predicate f1)
-         fn-lamda (jlambda :function f2)
+         pred-lamda f1
+         fn-lamda   f2
          expected  (->> test-seq
                         (filter f1)
                         (mapv f2))

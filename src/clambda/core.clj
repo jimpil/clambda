@@ -1,14 +1,12 @@
 (ns clambda.core
   (:refer-clojure :exclude [into-array])
-  (:require [clambda.redux :refer [abortive-stream vrest mrest rrest]]
-            [clambda.jlambda :as jl])
+  (:require [clambda.redux :refer [abortive-stream vrest mrest rrest]])
   (:import [java.util.stream Stream StreamSupport]
            [clojure.lang IReduceInit]
            (java.io BufferedReader)
-           (java.util Iterator Spliterator)
+           (java.util  Iterator List Map Set Spliterator)
            (clambda.redux SeqSpliterator)
-           (java.util.concurrent.atomic AtomicBoolean)
-           (java.util.function IntFunction)))
+           (java.util.concurrent.atomic AtomicBoolean)))
 
 (defn- accu*
   "A little helper for creating accumulators."
@@ -38,43 +36,87 @@
 ;;=================================
 
 (defn stream-reducible
-  "Turns a Stream into something reducible,
-   and optionally short-circuiting (via the 3-arg overload)."
+  "Turns a Stream into something reducible, and short-circuiting.
+   The 3-arg overload controls whether to perform an immutable (the default)
+   VS mutable reduction (per `Stream.reduce` VS `Stream.collect` respectively)."
   ([s]
    (stream-reducible s throw-combine-not-provided!))
-  ([^Stream s combinef]
+  ([s combinef]
+   (stream-reducible s false combinef))
+  ([^Stream s mutable-reduction? combinef]
    (reify IReduceInit
      (reduce [_ f init]
        (let [flag (AtomicBoolean. false)
              done? #(.get flag)
              done! #(.set flag true)
-             bi-function (jl/jlambda :bi-function (partial accu* f done!)) ;; accumulator
-             binary-op   (jl/jlambda :binary combinef)]       ;; combiner
+             accumulator (partial accu* f done!)]
          (with-open [estream (abortive-stream s done?)]
-           (.reduce estream init bi-function binary-op)))))))
+           (if mutable-reduction?
+             (.collect estream init accumulator combinef)
+             (.reduce  estream init accumulator combinef))))))))
+
+(defprotocol MutableContainer
+  (mut-accumulate [this e])
+  (mut-combine    [this other]))
+
+(extend-protocol MutableContainer
+  List
+  (mut-accumulate [this e]     (.add this e))
+  (mut-combine    [this other] (.addAll this other))
+  Set
+  (mut-accumulate [this e]     (.add this e))
+  (mut-combine    [this other] (.addAll this other))
+  Map
+  (mut-accumulate [this e]     (.put this (key e) (val e)))
+  (mut-combine    [this other] (.putAll this other))
+  StringBuilder
+  (mut-accumulate [this e]     (.append this e))
+  (mut-combine    [this other] (.append this (str other)))
+  )
+
+(defn init-from [x]
+  (try
+    (.clone x)
+    (catch Exception _
+      (let [empty-array (make-array Class 0)]
+        (or
+          (some-> (.getDeclaredConstructor (class x) empty-array)
+                  (.newInstance empty-array))
+          (throw
+            (IllegalStateException.
+              (str "Unable to clone object " x))))))))
 
 (defn stream-into
   "A 'collecting' transducing context (like `clojure.core/into`), for Java Streams.
    Useful for pouring streams into clojure data-structures
    without involving an intermediate Collection, with the added bonus
-   of being able apply a transducer along the way.
+   of being able to apply a transducer along the way.
    Parallel streams are supported, but there are two caveats. First of all <to> MUST be
    either empty, or something that can handle duplicates (e.g a set), because it will become
-   the <init> for more than one reductions. Be AWARE & CAUTIOUS!
+   the <init> for multiple reductions. Be AWARE & CAUTIOUS!
    Secondly, `Stream.reduce()`requires that the reduction does not mutate the values
    received as arguments to combine. Therefore, `conj` has to be the reducing fn per
    parallel reduction, leaving `conj!` (via `into`) for the 'outer' combining.
+   If you want a parallel mutable reduction, <to> must satisfy the MutableContainer protocol.
    For serial streams we can go fully mutably (much like `.collect()` does)."
   ([to ^Stream stream]
    (if (.isParallel stream)
-     (reduce conj to (stream-reducible stream into))
+     (if (coll? to)
+       (reduce conj to (stream-reducible stream into))
+       (->> (stream-reducible stream true mut-combine)
+            (reduce mut-accumulate (partial init-from to))))
      (into to (stream-reducible stream))))
   ([to xform ^Stream stream]
    (if (.isParallel stream)
-     ;; Cannot use `into` on a parallel stream because it may use transients.
-     ;; That goes against the requirement that the reduction
-     ;; does not mutate the values received as arguments to combine.
-     (transduce xform conj to (stream-reducible stream into))
+     (if (coll? to)
+       ;; Cannot use `into` on a parallel stream because it may use transients.
+       ;; That goes against the requirement that the reduction
+       ;; does not mutate the values received as arguments to combine.
+       (transduce xform conj to (stream-reducible stream into))
+       ;; we can however have a mutable-reduction,
+       ;; if <to> is a MutableContainer (see protocol above)
+       (->> (stream-reducible stream true mut-combine)
+            (reduce (xform mut-accumulate) (partial init-from to))))
      ;; for a serial stream we're golden - just delegate to `into`
      (into to xform (stream-reducible stream)))))
 
@@ -145,7 +187,7 @@
                                   is-sorted?  (bit-and Spliterator/SORTED)
                                   (or is-map?
                                       is-set?) (bit-and Spliterator/DISTINCT))
-         rest-fn (cond ;; 2-args so we can call it without caring
+         rest-fn (cond                                      ;; 2-args so we can call it without caring
                    is-vector?  vrest
                    is-set?     disj
                    is-map?     mrest
@@ -162,16 +204,10 @@
   ;; to help you avoid doing exactly that (going via Seq)
   (-> s .iterator iterator-seq))
 
-(defn jlambda
-  "Convenience wrapper-fn around `clambda.jlambda/jlambda`.
-   Type-hinting at the call site may be required (to avoid reflection)."
-  [t f]
-  (jl/jlambda t f))
-
 (defn stream-array
   "Collects all the elements of Stream <s> into an array of type <t>."
   [^Class t ^Stream s]
-  (->> (reify IntFunction (apply [_ size] (make-array t size)))
+  (->> (partial make-array t)
        (.toArray s)))
 
 (defn into-array

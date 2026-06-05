@@ -47,8 +47,8 @@
     (time
       (if java?
         (let [found (-> line-stream
-                        (.map (jlambda :function try-fn))
-                        (.filter (jlambda :predicate boolean))
+                        (.map try-fn)
+                        (.filter boolean)
                         .findAny
                         .get)]
           (is (= "mysecret"  found)))
