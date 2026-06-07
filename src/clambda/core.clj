@@ -4,7 +4,7 @@
   (:import [java.util.stream Stream StreamSupport]
            [clojure.lang IReduceInit]
            (java.io BufferedReader)
-           (java.util  Iterator List Map Set Spliterator)
+           (java.util Collection Iterator List Map Set Spliterator)
            (clambda.redux SeqSpliterator)
            (java.util.concurrent.atomic AtomicBoolean)))
 
@@ -27,7 +27,7 @@
   ([] nil)
   ([x] x)
   ([_ x]
-   (when x
+   (when (some? x)
      (ensure-reduced x))))
 
 (defn stream? [x]
@@ -55,36 +55,39 @@
              (.collect estream init accumulator combinef)
              (.reduce  estream init accumulator combinef))))))))
 
+(defn invoke-copy-ctor [o]
+  (or
+    (some-> (.getDeclaredConstructor
+              (class o)
+              (clojure.core/into-array [Collection]))
+            (.newInstance (clojure.core/into-array [o])))
+    (throw
+      (IllegalStateException.
+        (str "Did not find a copy-ctor accepting `Collection` for object " o)))))
+
 (defprotocol MutableContainer
+  (mut-init-from  [this])
   (mut-accumulate [this e])
   (mut-combine    [this other]))
 
 (extend-protocol MutableContainer
   List
+  (mut-init-from  [this]       (invoke-copy-ctor this))
   (mut-accumulate [this e]     (.add this e))
   (mut-combine    [this other] (.addAll this other))
   Set
+  (mut-init-from  [this]       (invoke-copy-ctor this))
   (mut-accumulate [this e]     (.add this e))
   (mut-combine    [this other] (.addAll this other))
   Map
+  (mut-init-from  [this]       (invoke-copy-ctor this))
   (mut-accumulate [this e]     (.put this (key e) (val e)))
   (mut-combine    [this other] (.putAll this other))
   StringBuilder
+  (mut-init-from  [this]       (StringBuilder. (str this)))
   (mut-accumulate [this e]     (.append this e))
   (mut-combine    [this other] (.append this (str other)))
   )
-
-(defn init-from [x]
-  (try
-    (.clone x)
-    (catch Exception _
-      (let [empty-array (make-array Class 0)]
-        (or
-          (some-> (.getDeclaredConstructor (class x) empty-array)
-                  (.newInstance empty-array))
-          (throw
-            (IllegalStateException.
-              (str "Unable to clone object " x))))))))
 
 (defn stream-into
   "A 'collecting' transducing context (like `clojure.core/into`), for Java Streams.
@@ -104,7 +107,7 @@
      (if (coll? to)
        (reduce conj to (stream-reducible stream into))
        (->> (stream-reducible stream true mut-combine)
-            (reduce mut-accumulate (partial init-from to))))
+            (reduce mut-accumulate (partial mut-init-from to))))
      (into to (stream-reducible stream))))
   ([to xform ^Stream stream]
    (if (.isParallel stream)
@@ -116,7 +119,7 @@
        ;; we can however have a mutable-reduction,
        ;; if <to> is a MutableContainer (see protocol above)
        (->> (stream-reducible stream true mut-combine)
-            (reduce (xform mut-accumulate) (partial init-from to))))
+            (reduce (xform mut-accumulate) (partial mut-init-from to))))
      ;; for a serial stream we're golden - just delegate to `into`
      (into to xform (stream-reducible stream)))))
 
@@ -127,13 +130,18 @@
    or `clojure.core/some` in terms of lazy-seqs. For parallel Streams, more
    like `.findAny()`, with the added bonus of aborting the search on the
    'other' threads as soon as an answer is found on 'some' thread."
+  ([stream]
+   (stream-some nil stream))
   ([xform stream]
    (stream-some identity xform stream))
   ([combine-f xform ^Stream stream]
    (let [combine (if (.isParallel stream)
                    (some-fn combine-f)
-                   throw-combine-not-provided!)]
-     (transduce xform rf-some (stream-reducible stream combine)))))
+                   throw-combine-not-provided!)
+         reducible (stream-reducible stream combine)]
+     (if (some? xform)
+       (transduce xform rf-some reducible)
+       (reduce rf-some reducible)))))
 
 (defn lines-reducible
   "Similar to `clojure.core/line-seq`, but
